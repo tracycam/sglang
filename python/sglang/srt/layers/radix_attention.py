@@ -162,8 +162,8 @@ class RadixAttention(nn.Module):
 
         context = get_tc_piecewise_forward_context()
         if (
-            forward_batch.forward_mode.is_extend()
-            and context is not None
+            context is not None
+            and forward_batch.forward_mode.is_extend()
             # ``_force_eager_attn`` is only set inside Inkling's eager
             # norm+attn+sconv region, never during tc-piecewise capture. Reading
             # the ContextVar under the fullgraph torch.compile trace is

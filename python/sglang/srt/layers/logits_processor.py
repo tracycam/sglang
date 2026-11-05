@@ -202,7 +202,7 @@ class LogitsProcessorOutput:
 
 @dataclasses.dataclass
 class LogitsMetadata:
-    forward_mode: ForwardMode
+    forward_mode: Optional[ForwardMode]
     capture_hidden_mode: CaptureHiddenMode = CaptureHiddenMode.NULL
     next_token_logits_buffer: Optional[torch.Tensor] = None
 
@@ -245,9 +245,12 @@ class LogitsMetadata:
 
     @classmethod
     def from_forward_batch(cls, forward_batch: ForwardBatch):
+        prepared_last_rows = current_platform.get_last_token_indices() is not None
+        if prepared_last_rows and forward_batch.return_logprob:
+            raise ValueError("prepared last-token rows do not support input logprobs")
         if (
-            forward_batch.forward_mode.is_extend()
-            and forward_batch.return_logprob
+            forward_batch.return_logprob
+            and forward_batch.forward_mode.is_extend()
             and not forward_batch.forward_mode.is_target_verify()
         ):
             extend_return_top_logprob = any(
@@ -270,25 +273,30 @@ class LogitsMetadata:
                 extend_token_ids_logprob
             ) = extend_logprob_pruned_lens_cpu = False
 
-        if forward_batch.forward_mode.is_draft_extend_v2():
+        if not prepared_last_rows and forward_batch.forward_mode.is_draft_extend_v2():
             draft_extend_select_index = forward_batch.spec_info.select_index
         else:
             draft_extend_select_index = None
 
         return cls(
-            forward_mode=forward_batch.forward_mode,
+            # Prepared rows give the same selection for extend and decode.
+            forward_mode=None if prepared_last_rows else forward_batch.forward_mode,
             capture_hidden_mode=forward_batch.capture_hidden_mode,
             next_token_logits_buffer=forward_batch.next_token_logits_buffer,
             extend_return_logprob=extend_return_logprob,
             extend_return_top_logprob=extend_return_top_logprob,
             extend_token_ids_logprob=extend_token_ids_logprob,
-            extend_seq_lens=forward_batch.extend_seq_lens,
-            extend_seq_lens_cpu=forward_batch.extend_seq_lens_cpu,
-            extend_logprob_start_lens_cpu=forward_batch.extend_logprob_start_lens_cpu,
+            extend_seq_lens=None if prepared_last_rows else forward_batch.extend_seq_lens,
+            extend_seq_lens_cpu=None if prepared_last_rows else forward_batch.extend_seq_lens_cpu,
+            extend_logprob_start_lens_cpu=(
+                None if prepared_last_rows else forward_batch.extend_logprob_start_lens_cpu
+            ),
             extend_logprob_pruned_lens_cpu=extend_logprob_pruned_lens_cpu,
             top_logprobs_nums=forward_batch.top_logprobs_nums,
             token_ids_logprobs=forward_batch.token_ids_logprobs,
-            extend_input_logprob_token_ids_gpu=forward_batch.extend_input_logprob_token_ids_gpu,
+            extend_input_logprob_token_ids_gpu=(
+                None if prepared_last_rows else forward_batch.extend_input_logprob_token_ids_gpu
+            ),
             is_prefill_only=forward_batch.is_prefill_only,
             global_num_tokens_gpu=forward_batch.global_num_tokens_gpu,
             dp_local_start_pos=forward_batch.dp_local_start_pos,
@@ -416,7 +424,8 @@ class LogitsProcessor(nn.Module):
             )
 
         # Diffusion LLM only.
-        if logits_metadata.forward_mode.is_dllm_extend():
+        if (current_platform.get_last_token_indices() is None
+                and logits_metadata.forward_mode.is_dllm_extend()):
             return self._get_dllm_logits(hidden_states, lm_head, logits_metadata)
 
         # Get the last hidden states and last logits for the next token prediction
@@ -493,7 +502,16 @@ class LogitsProcessor(nn.Module):
         aux_pruned_states = None
         token_to_seq_idx = []
 
-        if (
+        last_index = current_platform.get_last_token_indices()
+        if last_index is not None and not logits_metadata.extend_return_logprob:
+            pruned_states = hidden_states[last_index]
+            if hidden_states_before_norm is not None:
+                pruned_states_before_norm = hidden_states_before_norm[last_index]
+            if aux_hidden_states is not None:
+                aux_pruned_states = [hidden[last_index] for hidden in aux_hidden_states]
+            sample_indices = None
+            input_logprob_indices = None
+        elif (
             logits_metadata.forward_mode.is_decode_or_idle()
             or logits_metadata.forward_mode.is_target_verify()
             or logits_metadata.forward_mode.is_draft_extend_v2()
@@ -515,9 +533,7 @@ class LogitsProcessor(nn.Module):
             and not logits_metadata.extend_return_logprob
         ):
             # Prefill without input logprobs.
-            last_index = current_platform.get_last_token_indices()
-            if last_index is None:
-                last_index = torch.cumsum(logits_metadata.extend_seq_lens, dim=0) - 1
+            last_index = torch.cumsum(logits_metadata.extend_seq_lens, dim=0) - 1
             pruned_states = hidden_states[last_index]
             if hidden_states_before_norm is not None:
                 pruned_states_before_norm = hidden_states_before_norm[last_index]
