@@ -26,6 +26,7 @@ from sglang.srt.mem_cache.common import (
     evict_from_tree_cache,
 )
 from sglang.srt.mem_cache.memory_pool import HybridReqToTokenPool, ReqToTokenPool
+from sglang.srt.platforms import current_platform
 from sglang.srt.runtime_context import get_server_args
 from sglang.srt.utils import (
     is_cpu,
@@ -65,6 +66,15 @@ def write_cache_indices(
     prefix_tensors: list[torch.Tensor],
     req_to_token_pool: ReqToTokenPool,
 ):
+    if current_platform.write_req_to_token_pool(
+        req_to_token_pool,
+        req_pool_indices_cpu,
+        prefix_lens_cpu,
+        extend_lens_cpu,
+        prefix_tensors,
+        out_cache_loc,
+    ):
+        return
     if support_triton(get_server_args().attention_backend):
         prefix_pointers = torch.tensor(
             [t.data_ptr() for t in prefix_tensors],
@@ -570,14 +580,23 @@ def alloc_for_decode(batch: ScheduleBatch, token_per_req: int) -> torch.Tensor:
         )
 
     # Write to req_to_token_pool
-    if batch.model_config.is_encoder_decoder:
-        locs = batch.encoder_lens + seq_lens_gpu
-    else:
-        locs = seq_lens_gpu.clone()
+    if not current_platform.write_req_to_token_pool(
+        batch.req_to_token_pool,
+        batch.req_pool_indices_cpu,
+        batch.seq_lens_cpu,
+        token_per_req,
+        None,
+        out_cache_loc,
+        is_encoder_decoder=batch.model_config.is_encoder_decoder,
+    ):
+        if batch.model_config.is_encoder_decoder:
+            locs = batch.encoder_lens + seq_lens_gpu
+        else:
+            locs = seq_lens_gpu.clone()
 
-    batch.req_to_token_pool.write(
-        (batch.req_pool_indices, locs), out_cache_loc.to(torch.int32)
-    )
+        batch.req_to_token_pool.write(
+            (batch.req_pool_indices, locs), out_cache_loc.to(torch.int32)
+        )
 
     # DSV4-NPU hook: no-op on non-DSV4 paths.
     if _is_npu:

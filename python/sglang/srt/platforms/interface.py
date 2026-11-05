@@ -131,6 +131,13 @@ class SRTPlatform(DeviceMixin):
         """Scope platform-specific CPU preparation of rotary lookup tables."""
         return nullcontext()
 
+    def write_req_to_token_pool(
+        self, pool, request_indices, prefix_lengths, extend_lengths, prefixes, locations,
+        *, is_encoder_decoder=False,
+    ) -> bool:
+        """Write request mappings, or return False to use the default implementation."""
+        return False
+
     # ------------------------------------------------------------------
     # MultiPlatformOp integration
     # ------------------------------------------------------------------
