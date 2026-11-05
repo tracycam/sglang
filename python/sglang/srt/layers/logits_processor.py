@@ -47,6 +47,7 @@ from sglang.srt.model_executor.forward_batch_info import (
     ForwardBatch,
     ForwardMode,
 )
+from sglang.srt.platforms import current_platform
 from sglang.srt.runtime_context import get_parallel, get_server_args
 from sglang.srt.utils.common import (
     is_cpu,
@@ -514,7 +515,9 @@ class LogitsProcessor(nn.Module):
             and not logits_metadata.extend_return_logprob
         ):
             # Prefill without input logprobs.
-            last_index = torch.cumsum(logits_metadata.extend_seq_lens, dim=0) - 1
+            last_index = current_platform.get_last_token_indices()
+            if last_index is None:
+                last_index = torch.cumsum(logits_metadata.extend_seq_lens, dim=0) - 1
             pruned_states = hidden_states[last_index]
             if hidden_states_before_norm is not None:
                 pruned_states_before_norm = hidden_states_before_norm[last_index]

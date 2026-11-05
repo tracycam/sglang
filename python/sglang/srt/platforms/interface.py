@@ -139,6 +139,10 @@ class SRTPlatform(DeviceMixin):
         """Whether the attention backend accepts K/V without splitting heads."""
         return False
 
+    def get_last_token_indices(self):
+        """Return prepared last-token indices, or None for the default computation."""
+        return None
+
     def write_req_to_token_pool(
         self, pool, request_indices, prefix_lengths, extend_lengths, prefixes, locations,
         *, is_encoder_decoder=False,
