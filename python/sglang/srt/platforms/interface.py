@@ -138,6 +138,14 @@ class SRTPlatform(DeviceMixin):
         """Write request mappings, or return False to use the default implementation."""
         return False
 
+    def prepare_decode_positions(self, seq_lens_cpu, device):
+        """Prepare decode positions, or return None for the default implementation."""
+        return None
+
+    def prepare_extend_positions(self, prefix_lens_cpu, seq_lens_cpu, total, device):
+        """Prepare extend positions, or return None for the default implementation."""
+        return None
+
     # ------------------------------------------------------------------
     # MultiPlatformOp integration
     # ------------------------------------------------------------------

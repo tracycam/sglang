@@ -51,6 +51,7 @@ from sglang.srt.layers.dp_attention import (
 from sglang.srt.model_executor.forward_batch_deepseek_mha_mixin import (
     ForwardBatchDeepSeekMHAMixin,
 )
+from sglang.srt.platforms import current_platform
 from sglang.srt.runtime_context import get_parallel, get_server_args
 from sglang.srt.utils import (
     is_cuda,
@@ -852,7 +853,9 @@ class ForwardBatch(ForwardBatchDeepSeekMHAMixin):
         # Init position information
         if ret.forward_mode.is_decode() or ret.forward_mode.is_target_verify():
             if ret.positions is None:
-                ret.positions = clamp_position(batch.seq_lens)
+                ret.positions = current_platform.prepare_decode_positions(batch.seq_lens_cpu, device)
+                if ret.positions is None:
+                    ret.positions = clamp_position(batch.seq_lens)
         else:
             if isinstance(extend_seq_lens, list):
                 # Main path: H2D from host lists; populate *_cpu mirrors.
@@ -871,12 +874,20 @@ class ForwardBatch(ForwardBatchDeepSeekMHAMixin):
                 ret.extend_seq_lens = extend_seq_lens
                 ret.extend_prefix_lens = extend_prefix_lens
             ret.extend_num_tokens = batch.extend_num_tokens
-            positions, ret.extend_start_loc = compute_position(
-                model_runner.server_args.attention_backend,
-                ret.extend_prefix_lens,
-                ret.extend_seq_lens,
+            prepared_positions = current_platform.prepare_extend_positions(
+                ret.extend_prefix_lens_cpu,
+                ret.extend_seq_lens_cpu,
                 ret.extend_num_tokens,
+                device,
             )
+            if prepared_positions is None:
+                prepared_positions = compute_position(
+                    model_runner.server_args.attention_backend,
+                    ret.extend_prefix_lens,
+                    ret.extend_seq_lens,
+                    ret.extend_num_tokens,
+                )
+            positions, ret.extend_start_loc = prepared_positions
             if ret.positions is None:
                 ret.positions = positions
             ret.extend_logprob_start_lens_cpu = extend_logprob_start_lens
