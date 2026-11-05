@@ -100,6 +100,7 @@ class RotaryEmbedding(MultiPlatformOp):
         # NOTE(ByronHsu): cache needs to be in FP32 for numerical stability.
         if not (_is_cuda or _is_xpu or envs.SGLANG_ROPE_CACHE_FP32.get()):
             cache = cache.to(dtype)
+        cache = current_platform.prepare_rope_cache(cache)
 
         if (
             (not (_is_cuda) or self.head_size not in [64, 128, 256, 512])

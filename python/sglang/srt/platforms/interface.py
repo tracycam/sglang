@@ -131,6 +131,10 @@ class SRTPlatform(DeviceMixin):
         """Scope platform-specific CPU preparation of rotary lookup tables."""
         return nullcontext()
 
+    def prepare_rope_cache(self, cache):
+        """Prepare a rotary lookup table for this platform."""
+        return cache
+
     def write_req_to_token_pool(
         self, pool, request_indices, prefix_lengths, extend_lengths, prefixes, locations,
         *, is_encoder_decoder=False,
