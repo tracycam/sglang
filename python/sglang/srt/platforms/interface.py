@@ -12,6 +12,7 @@ Out-of-tree platforms register via setuptools entry_points under the
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 from typing import TYPE_CHECKING, Optional, Type
 
 from sglang.srt.platforms.device_mixin import DeviceMixin, PlatformEnum
@@ -125,6 +126,10 @@ class SRTPlatform(DeviceMixin):
     def init_backend(self) -> None:
         """One-time backend initialization.  Called in each worker."""
         pass
+
+    def rope_cache_initialization_context(self):
+        """Scope platform-specific CPU preparation of rotary lookup tables."""
+        return nullcontext()
 
     # ------------------------------------------------------------------
     # MultiPlatformOp integration

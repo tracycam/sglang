@@ -95,7 +95,8 @@ class RotaryEmbedding(MultiPlatformOp):
         self.is_neox_style = is_neox_style
         self.dtype = dtype
 
-        cache = self._compute_cos_sin_cache()
+        with current_platform.rope_cache_initialization_context():
+            cache = self._compute_cos_sin_cache()
         # NOTE(ByronHsu): cache needs to be in FP32 for numerical stability.
         if not (_is_cuda or _is_xpu or envs.SGLANG_ROPE_CACHE_FP32.get()):
             cache = cache.to(dtype)
