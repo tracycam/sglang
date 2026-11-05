@@ -34,6 +34,7 @@ from sglang.srt.managers.io_struct import (
     BatchTokenIDOutput,
     ConfigureLoggingReq,
     FreezeGCReq,
+    ShutdownReq,
     sock_recv,
     sock_send,
 )
@@ -168,6 +169,8 @@ class DetokenizerManager(MultiHttpWorkerDetokenizerMixin):
         while True:
             with self.soft_watchdog.disable():
                 recv_obj = sock_recv(self.recv_from_scheduler)
+            if isinstance(recv_obj, ShutdownReq):
+                break
             output = self._request_dispatcher(recv_obj)
             if output is not None:
                 sock_send(self.send_to_tokenizer, output)

@@ -131,6 +131,10 @@ class SRTPlatform(DeviceMixin):
         """Prepare a model forward callable for this platform."""
         return forward
 
+    def requires_graceful_worker_shutdown(self):
+        """Whether engine workers must complete their own process teardown."""
+        return False
+
     def rope_cache_initialization_context(self):
         """Scope platform-specific CPU preparation of rotary lookup tables."""
         return nullcontext()

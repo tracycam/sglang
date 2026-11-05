@@ -77,6 +77,7 @@ from sglang.srt.managers.io_struct import (
     ResumeMemoryOccupationReqInput,
     RpcReqInput,
     RpcReqOutput,
+    ShutdownReq,
     UnloadLoRAAdapterReqInput,
     UpdateWeightFromDiskReqInput,
     UpdateWeightsFromDistributedReqInput,
@@ -1137,6 +1138,8 @@ class Engine(EngineScoreMixin, EngineBase):
         """Shutdown the engine; block until the scheduler subprocess releases
         its GPU context so the caller can immediately reallocate on the same
         device."""
+        if getattr(self, "_workers_stopped", False):
+            return
         if (
             self.tokenizer_manager is not None
             and self.tokenizer_manager._subprocess_watchdog is not None
@@ -1156,7 +1159,53 @@ class Engine(EngineScoreMixin, EngineBase):
             self._terminate_weight_cache_daemons(daemon_procs)
             self._weight_cache_daemon_procs = []
 
+        from sglang.srt.platforms import current_platform
+
+        if (
+            self.tokenizer_manager is not None
+            and self.tokenizer_manager._subprocess_watchdog is not None
+            and current_platform.requires_graceful_worker_shutdown()
+        ):
+            self._shutdown_workers_gracefully()
+            self._workers_stopped = True
+            return
         kill_process_tree(os.getpid(), include_parent=False, wait_timeout=60)
+        self._workers_stopped = True
+
+    def _shutdown_workers_gracefully(self):
+        watchdog = self.tokenizer_manager._subprocess_watchdog
+        workers = dict(zip(watchdog._names, watchdog._processes))
+        if set(workers) != {"scheduler_0", "detokenizer"}:
+            raise RuntimeError("graceful engine shutdown requires one scheduler and detokenizer")
+
+        def wait_for(name):
+            worker = workers[name]
+            worker.join(timeout=30)
+            if worker.is_alive() or worker.exitcode != 0:
+                raise RuntimeError(f"{name} did not exit cleanly: {worker.exitcode}")
+
+        context = None
+        socket = None
+        try:
+            self.tokenizer_manager._dispatch_to_scheduler(ShutdownReq())
+            wait_for("scheduler_0")
+            # In skip-tokenizer mode the scheduler's normal output socket points
+            # to the tokenizer, so address the detokenizer directly.
+            context = zmq.Context()
+            socket = get_zmq_socket(context, zmq.PUSH, self.port_args.detokenizer_ipc_name, False)
+            sock_send(socket, ShutdownReq())
+            wait_for("detokenizer")
+        except Exception:
+            for worker in workers.values():
+                if worker.is_alive():
+                    worker.terminate()
+                    worker.join(timeout=5)
+            raise
+        finally:
+            if socket is not None:
+                socket.close(linger=0)
+            if context is not None:
+                context.term()
 
     def __enter__(self):
         return self
