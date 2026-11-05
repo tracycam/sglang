@@ -570,6 +570,7 @@ class ModelRunner:
         self.init_token_oracle()
         self.sampler = create_sampler()
         self.load_model()
+        self.model.forward = current_platform.prepare_model_forward(self.model.forward)
         prepare_moe_topk(
             model=self.model,
             model_config=self.model_config,

@@ -127,6 +127,10 @@ class SRTPlatform(DeviceMixin):
         """One-time backend initialization.  Called in each worker."""
         pass
 
+    def prepare_model_forward(self, forward):
+        """Prepare a model forward callable for this platform."""
+        return forward
+
     def rope_cache_initialization_context(self):
         """Scope platform-specific CPU preparation of rotary lookup tables."""
         return nullcontext()
