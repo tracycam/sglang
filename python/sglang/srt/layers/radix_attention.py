@@ -25,6 +25,7 @@ from torch import nn
 
 from sglang.srt.compilation.compilation_config import register_split_op
 from sglang.srt.model_executor.forward_context import get_attn_backend
+from sglang.srt.platforms import current_platform
 from sglang.srt.model_executor.runner_backend_utils.breakable_cuda_graph import (
     eager_on_graph,
     is_in_breakable_cuda_graph,
@@ -153,10 +154,10 @@ class RadixAttention(nn.Module):
         if k is not None:
             # For cross-layer sharing, kv can be None
             assert v is not None
-            if "k_rope" not in kwargs:
+            if "k_rope" not in kwargs and not current_platform.attention_accepts_flat_kv():
                 k = k.view(-1, self.tp_k_head_num, self.qk_head_dim)
                 v = v.view(-1, self.tp_v_head_num, self.v_head_dim)
-            else:
+            elif "k_rope" in kwargs:
                 k = k.view(-1, self.tp_k_head_num, self.v_head_dim)
 
         context = get_tc_piecewise_forward_context()

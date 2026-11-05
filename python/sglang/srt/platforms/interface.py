@@ -135,6 +135,10 @@ class SRTPlatform(DeviceMixin):
         """Prepare a rotary lookup table for this platform."""
         return cache
 
+    def attention_accepts_flat_kv(self) -> bool:
+        """Whether the attention backend accepts K/V without splitting heads."""
+        return False
+
     def write_req_to_token_pool(
         self, pool, request_indices, prefix_lengths, extend_lengths, prefixes, locations,
         *, is_encoder_decoder=False,
