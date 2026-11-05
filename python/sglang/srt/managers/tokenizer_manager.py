@@ -1007,6 +1007,9 @@ class TokenizerManager(TokenizerControlMixin, TokenizerManagerScoreMixin):
             mm_inputs = None
 
         self._validate_one_request(obj, input_ids)
+        from sglang.srt.platforms import current_platform
+
+        current_platform.validate_input_token_ids([input_ids], self.model_config.vocab_size)
         return self._create_tokenized_object(
             obj, input_text, input_ids, input_embeds, mm_inputs, token_type_ids
         )

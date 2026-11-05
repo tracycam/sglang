@@ -49,6 +49,10 @@ class SRTPlatform(DeviceMixin):
         """
         pass
 
+    def validate_input_token_ids(self, input_ids, vocabulary_size: int) -> None:
+        """Validate host request tokens before they are sent to the device."""
+        pass
+
     # ------------------------------------------------------------------
     # Subsystem factory methods
     # ------------------------------------------------------------------
