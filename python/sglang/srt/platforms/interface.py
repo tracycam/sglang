@@ -143,6 +143,10 @@ class SRTPlatform(DeviceMixin):
         """Scope platform-specific CPU preparation of rotary lookup tables."""
         return nullcontext()
 
+    def rope_cache_computation_device(self, cache_device):
+        """Return the device used to compute additional rotary lookup rows."""
+        return cache_device
+
     def prepare_rope_cache(self, cache):
         """Prepare a rotary lookup table for this platform."""
         return cache

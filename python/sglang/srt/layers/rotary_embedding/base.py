@@ -193,19 +193,16 @@ class RotaryEmbedding(MultiPlatformOp):
         device = self.cos_sin_cache.device
         dtype = self.cos_sin_cache.dtype
 
-        # Compute inv_freq on same device
-        inv_freq = self._compute_inv_freq(self.base).to(device=device)
-
-        # Incremental computation for new positions only
-        start = cur_len
-        t_new = torch.arange(start, new_len, dtype=inv_freq.dtype, device=device)
-        if t_new.numel() == 0:
-            return
-
-        freqs_new = torch.einsum("i,j->ij", t_new, inv_freq)
-        cos_new = freqs_new.cos()
-        sin_new = freqs_new.sin()
-        new_rows = torch.cat((cos_new, sin_new), dim=-1).to(dtype=dtype)
+        compute_device = current_platform.rope_cache_computation_device(device)
+        with current_platform.rope_cache_initialization_context():
+            inv_freq = self._compute_inv_freq(self.base).to(device=compute_device)
+            t_new = torch.arange(cur_len, new_len, dtype=inv_freq.dtype, device=compute_device)
+            if t_new.numel() == 0:
+                return
+            freqs_new = torch.einsum("i,j->ij", t_new, inv_freq)
+            cos_new = freqs_new.cos()
+            sin_new = freqs_new.sin()
+            new_rows = torch.cat((cos_new, sin_new), dim=-1).to(device=device, dtype=dtype)
 
         # Update cache with new rows
         self.cos_sin_cache = torch.cat((self.cos_sin_cache, new_rows), dim=0).to(
