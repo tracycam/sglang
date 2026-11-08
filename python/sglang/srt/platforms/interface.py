@@ -147,6 +147,10 @@ class SRTPlatform(DeviceMixin):
         """Return the device used to compute additional rotary lookup rows."""
         return cache_device
 
+    def paged_decode_last_locations(self, pool, request_indices, sequence_lengths):
+        """Return prior device KV locations, or None to use normal indexing."""
+        return None
+
     def prepare_rope_cache(self, cache):
         """Prepare a rotary lookup table for this platform."""
         return cache
