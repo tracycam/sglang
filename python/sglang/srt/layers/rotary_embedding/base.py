@@ -205,9 +205,8 @@ class RotaryEmbedding(MultiPlatformOp):
             new_rows = torch.cat((cos_new, sin_new), dim=-1).to(device=device, dtype=dtype)
 
         # Update cache with new rows
-        self.cos_sin_cache = torch.cat((self.cos_sin_cache, new_rows), dim=0).to(
-            device=device, dtype=dtype
-        )
+        cache = torch.cat((self.cos_sin_cache, new_rows), dim=0).to(device=device, dtype=dtype)
+        self.cos_sin_cache = current_platform.prepare_rope_cache(cache)
 
     def get_cos_sin_with_position(self, positions):
         assert positions.ndim == 1, (
