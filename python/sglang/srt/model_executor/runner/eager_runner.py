@@ -49,6 +49,7 @@ from sglang.srt.model_executor.runner_backend_utils.tc_piecewise_cuda_graph impo
     enable_tc_piecewise_cuda_graph,
     set_tc_piecewise_forward_context,
 )
+from sglang.srt.platforms import current_platform
 from sglang.srt.utils import is_hip
 from sglang.srt.utils.common import (
     ceil_align,
@@ -171,6 +172,11 @@ class EagerRunner(BaseRunner):
         load_batch."""
         if envs.SGLANG_EAGER_INPUT_NO_COPY.get():
             return replace(forward_batch)
+        deferred_positions = None
+        if (current_platform.defer_eager_decode_positions() and forward_batch.forward_mode.is_decode() and
+                forward_batch.positions is not None and forward_batch.positions.device.type == "cpu"):
+            deferred_positions = forward_batch.positions
+            forward_batch = replace(forward_batch, positions=None)
         raw_bs = forward_batch.batch_size
         if forward_batch.input_ids is not None:
             raw_num_tokens = forward_batch.input_ids.shape[0]
@@ -187,11 +193,14 @@ class EagerRunner(BaseRunner):
             padded_num_tokens=raw_num_tokens,
             pp_proxy_tensors=pp_proxy_tensors,
         )
-        return registry.extract_buffer(
+        result = registry.extract_buffer(
             padded_bs=raw_bs,
             padded_num_tokens=raw_num_tokens,
             forward_batch_template=forward_batch,
         )
+        if deferred_positions is not None:
+            result.positions = deferred_positions
+        return result
 
     def execute(
         self, forward_batch: ForwardBatch, pp_proxy_tensors=None, **kwargs
@@ -226,14 +235,24 @@ class EagerRunner(BaseRunner):
         model_runner = self.model_runner
         enable_pdmux = self.enable_pdmux
         attn_backend, pdmux_ctx = self._resolve_decode_pdmux()
+        original_batch = forward_batch
+        deferred_positions = (current_platform.defer_eager_decode_positions() and
+                              forward_batch.positions is not None and
+                              forward_batch.positions.device.type == "cpu")
         if not enable_pdmux:
             forward_batch = self.load_batch(forward_batch, pp_proxy_tensors)
         if forward_batch.needs_forward_metadata_init():
             if hasattr(model_runner.model, "prepare_forward_batch"):
+                if deferred_positions:
+                    raise RuntimeError("deferred decode positions do not support model pre-planning")
                 # Prepare model-specific attention metadata before planning,
                 # e.g. Moss-VL's prefill cross-attention custom mask.
                 model_runner.model.prepare_forward_batch(forward_batch)
             attn_backend.init_forward_metadata(forward_batch)
+        if deferred_positions:
+            if forward_batch.positions is None or forward_batch.positions.device.type == "cpu":
+                raise RuntimeError("deferred decode positions were not prepared by the attention backend")
+            original_batch.positions = forward_batch.positions
         # FIXME: add pp_proxy_tensors arg to all models
         kwargs = model_runner._pp_kwargs(pp_proxy_tensors)
 

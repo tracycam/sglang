@@ -174,6 +174,10 @@ class SRTPlatform(DeviceMixin):
         """Prepare decode positions, or return None for the default implementation."""
         return None
 
+    def defer_eager_decode_positions(self) -> bool:
+        """Whether host decode positions are prepared by the attention backend."""
+        return False
+
     def prepare_extend_positions(self, prefix_lens_cpu, seq_lens_cpu, total, device):
         """Prepare extend positions, or return None for the default implementation."""
         return None
