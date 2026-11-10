@@ -639,9 +639,17 @@ class CompressedTensorsConfig(QuantizationConfig):
                     )
 
             if self._is_fp8_w8a8(weight_quant, input_quant):
-                is_fp8_w8a8_supported = self._check_scheme_supported(
-                    CompressedTensorsW8A8Fp8.get_min_capability(), error=False
+                from sglang.srt.platforms import current_platform
+
+                is_fp8_w8a8_supported = current_platform.supports_compressed_w8a8_fp8(
+                    weight_quant, input_quant
                 )
+                if is_fp8_w8a8_supported is None:
+                    is_fp8_w8a8_supported = self._check_scheme_supported(
+                        CompressedTensorsW8A8Fp8.get_min_capability(), error=False
+                    )
+                elif not is_fp8_w8a8_supported:
+                    raise NotImplementedError("Platform does not support this compressed W8A8 FP8 scheme")
                 if is_fp8_w8a8_supported:
                     return CompressedTensorsW8A8Fp8(
                         weight_quant=weight_quant,
@@ -872,7 +880,13 @@ class CompressedTensorsConfig(QuantizationConfig):
         # Raise error if device does not support the scheme
         # (e.g. fp8 needs ada lovelace)
         # Note: NPU devices do not support min_capability function
-        if not _is_npu:
+        from sglang.srt.platforms import current_platform
+
+        platform_fp8 = (current_platform.supports_compressed_w8a8_fp8(weight_quant, input_quant)
+                        if isinstance(scheme, CompressedTensorsW8A8Fp8) else None)
+        if platform_fp8 is False:
+            raise NotImplementedError("Platform does not support this compressed W8A8 FP8 scheme")
+        if not _is_npu and platform_fp8 is None:
             self._check_scheme_supported(scheme.get_min_capability())
         logger.debug("Using scheme: %s for %s", scheme.__class__.__name__, layer_name)
         return scheme

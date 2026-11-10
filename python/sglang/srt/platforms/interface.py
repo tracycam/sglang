@@ -108,6 +108,18 @@ class SRTPlatform(DeviceMixin):
         """Whether this platform supports FP8 quantization."""
         return False
 
+    def supports_compressed_w8a8_fp8(self, weight_quant, input_quant) -> Optional[bool]:
+        """Return an explicit FP8 scheme decision, or None to use the default device check."""
+        return None
+
+    def prepare_w8a8_fp8_weight(self, layer, strategy, scale_name: str) -> bool:
+        """Prepare a loaded FP8 linear weight if this platform owns its layout."""
+        return False
+
+    def get_w8a8_block_fp8_linear(self):
+        """Return a platform block-FP8 linear implementation, if one is supplied."""
+        return None
+
     def support_cuda_graph(self) -> bool:
         """Whether this platform supports device graph capture and replay.
         Controls CUDA graph (CudaGraphRunner) for the decode path.

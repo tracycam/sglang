@@ -143,6 +143,10 @@ class CompressedTensorsW8A8Fp8(CompressedTensorsLinearScheme):
             layer.register_parameter("input_scale", input_scale)
 
     def process_weights_after_loading(self, layer) -> None:
+        from sglang.srt.platforms import current_platform
+
+        if current_platform.prepare_w8a8_fp8_weight(layer, self.strategy, "weight_scale"):
+            return
         if self.strategy == QuantizationStrategy.TENSOR:
             max_w_scale, weight = requantize_with_max_scale(
                 weight=layer.weight,

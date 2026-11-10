@@ -460,6 +460,11 @@ def dispatch_w8a8_block_fp8_linear() -> Callable:
     1. The --fp8-gemm-backend server argument (preferred)
     2. Auto-detection based on hardware capabilities
     """
+    from sglang.srt.platforms import current_platform
+
+    platform_implementation = current_platform.get_w8a8_block_fp8_linear()
+    if platform_implementation is not None:
+        return platform_implementation
     backend = get_fp8_gemm_runner_backend()
 
     # Handle explicit backend selection via --fp8-gemm-backend
