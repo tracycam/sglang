@@ -182,9 +182,17 @@ class SRTPlatform(DeviceMixin):
         """Store to a request-pool buffer using allocator-owned indices."""
         buffer[indices] = values.to(buffer.dtype)
 
+    def advance_decode_lengths(self, seq_lens, orig_seq_lens):
+        """Return updated device lengths without changing prior batch tensors."""
+        return seq_lens + 1, orig_seq_lens + 1
+
     def defer_eager_decode_positions(self) -> bool:
         """Whether host decode positions are prepared by the attention backend."""
         return False
+
+    def copy_eager_inputs(self) -> bool:
+        """Whether eager execution needs fixed-address input buffers."""
+        return True
 
     def prepare_extend_positions(self, prefix_lens_cpu, seq_lens_cpu, total, device):
         """Prepare extend positions, or return None for the default implementation."""

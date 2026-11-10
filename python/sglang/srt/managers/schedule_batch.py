@@ -2898,9 +2898,12 @@ class ScheduleBatch(ScheduleBatchDisaggregationDecodeMixin):
 
         # New-tensor avoids racing model_worker_batch refs queued for
         # overlap forward.
-        self.seq_lens = self.seq_lens + 1
+        from sglang.srt.platforms import current_platform
+
+        self.seq_lens, self.orig_seq_lens = current_platform.advance_decode_lengths(
+            self.seq_lens, self.orig_seq_lens
+        )
         self.seq_lens_cpu = self.seq_lens_cpu + 1
-        self.orig_seq_lens = self.orig_seq_lens + 1
         # Sum is recomputed lazily by ForwardBatch.init_new.
         self.seq_lens_sum = None
 

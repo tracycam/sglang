@@ -170,7 +170,7 @@ class EagerRunner(BaseRunner):
         """Copy the live batch into the fixed-max eager static buffers (sliced to
         this batch's shape) — the eager counterpart of the cuda-graph runners'
         load_batch."""
-        if envs.SGLANG_EAGER_INPUT_NO_COPY.get():
+        if envs.SGLANG_EAGER_INPUT_NO_COPY.get() or not current_platform.copy_eager_inputs():
             return replace(forward_batch)
         deferred_positions = None
         if (current_platform.defer_eager_decode_positions() and forward_batch.forward_mode.is_decode() and
