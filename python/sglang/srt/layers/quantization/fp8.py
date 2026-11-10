@@ -815,6 +815,13 @@ class Fp8LinearMethod(LinearMethodBase):
         layer.input_scale = None
 
     def process_weights_after_loading(self, layer: Module) -> None:
+        from sglang.srt.platforms import current_platform
+
+        if not self.use_mxfp8:
+            strategy = "block" if self.block_quant else "channel_or_tensor"
+            scale_name = "weight_scale_inv" if self.block_quant else "weight_scale"
+            if current_platform.prepare_w8a8_fp8_weight(layer, strategy, scale_name):
+                return
         if self.block_quant:
             self.process_weights_after_loading_block_quant(layer)
         else:

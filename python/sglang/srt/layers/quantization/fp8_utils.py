@@ -1767,6 +1767,11 @@ def apply_fp8_linear(
     pad_output: Optional[bool] = None,
     compressed_tensor_quant: bool = False,
 ) -> torch.Tensor:
+    from sglang.srt.platforms import current_platform
+
+    platform_implementation = current_platform.get_w8a8_fp8_linear()
+    if platform_implementation is not None:
+        return platform_implementation(input, weight, weight_scale, input_scale, input_scale_ub, bias)
     # Note: we pad the input because torch._scaled_mm is more performant
     # for matrices with batch dimension > 16.
     # This could change in the future.

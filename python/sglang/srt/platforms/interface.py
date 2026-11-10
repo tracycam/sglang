@@ -120,6 +120,10 @@ class SRTPlatform(DeviceMixin):
         """Return a platform block-FP8 linear implementation, if one is supplied."""
         return None
 
+    def get_w8a8_fp8_linear(self):
+        """Return a platform per-channel or per-tensor FP8 linear implementation."""
+        return None
+
     def support_cuda_graph(self) -> bool:
         """Whether this platform supports device graph capture and replay.
         Controls CUDA graph (CudaGraphRunner) for the decode path.
