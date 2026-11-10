@@ -174,6 +174,14 @@ class SRTPlatform(DeviceMixin):
         """Prepare decode positions, or return None for the default implementation."""
         return None
 
+    def gather_scheduler_values(self, buffer, indices):
+        """Gather from a request-pool buffer using allocator-owned indices."""
+        return buffer[indices]
+
+    def store_scheduler_values(self, buffer, indices, values):
+        """Store to a request-pool buffer using allocator-owned indices."""
+        buffer[indices] = values.to(buffer.dtype)
+
     def defer_eager_decode_positions(self) -> bool:
         """Whether host decode positions are prepared by the attention backend."""
         return False

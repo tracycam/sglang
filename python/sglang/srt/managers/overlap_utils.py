@@ -87,10 +87,14 @@ def resolve_forward_inputs(batch: ScheduleBatch, future_map: FutureMap) -> None:
     - Prefill: H2D copy from pinned CPU staging (prefill_input_ids_cpu).
     - Decode/spec_v2: gather from FutureMap (last iter's sampled token).
     """
+    from sglang.srt.platforms import current_platform
+
     if batch.prefill_input_ids_cpu is not None:
         prefill_gpu = batch.prefill_input_ids_cpu.to(batch.device, non_blocking=True)
         if batch.mix_running_indices is not None:
-            decode_gpu = future_map.output_tokens_buf[batch.mix_running_indices]
+            decode_gpu = current_platform.gather_scheduler_values(
+                future_map.output_tokens_buf, batch.mix_running_indices
+            )
             if _DEBUG_ASSERT:
                 _assert_nonneg_and_invalidate(
                     decode_gpu,
@@ -103,7 +107,9 @@ def resolve_forward_inputs(batch: ScheduleBatch, future_map: FutureMap) -> None:
         batch.prefill_input_ids_cpu = None
         batch.mix_running_indices = None
     elif batch.input_ids is None and future_map.spec_algo.is_none():
-        batch.input_ids = future_map.output_tokens_buf[batch.req_pool_indices]
+        batch.input_ids = current_platform.gather_scheduler_values(
+            future_map.output_tokens_buf, batch.req_pool_indices
+        )
         if _DEBUG_ASSERT:
             _assert_nonneg_and_invalidate(
                 batch.input_ids, future_map.output_tokens_buf, batch.req_pool_indices
@@ -499,6 +505,8 @@ class FutureMap:
             )
 
     def stash(self, future_indices: torch.Tensor, payload: RelayPayload) -> None:
+        from sglang.srt.platforms import current_platform
+
         if self.spec_algo.is_ngram():
             # FIXME: remove once precomputed draft is supported.
             return
@@ -509,8 +517,8 @@ class FutureMap:
         if not self._forward_buf_initialized:
             self._lazy_init_forward_buf(payload)
         self._maybe_init_dsa_topk_indices_buf(payload)
-        self.output_tokens_buf[indices] = payload.bonus_tokens.to(
-            self.output_tokens_buf.dtype
+        current_platform.store_scheduler_values(
+            self.output_tokens_buf, indices, payload.bonus_tokens
         )
 
         if self.need_topk:
