@@ -458,10 +458,14 @@ class MultimemAllGatherer:
         enabled: bool = True,
         skip_entry_sync: bool = False,
     ):
+        from sglang.srt.platforms import current_platform
+
         self._max_tokens = int(max_tokens)
         self._skip_entry_sync = skip_entry_sync
-        # None => always NCCL; _UNINIT => build on first eager call.
-        self._state = self._UNINIT if enabled else None
+        # None => always standard TP all-gather; _UNINIT => build PTX multimem on first CUDA call.
+        self._state = (
+            self._UNINIT if (enabled and current_platform.is_cuda()) else None
+        )
         if self._state is self._UNINIT:
             # Lazy import avoids a module-load dependency on the distributed facade.
             from sglang.srt.distributed import get_tp_group

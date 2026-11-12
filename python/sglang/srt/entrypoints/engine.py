@@ -1175,12 +1175,17 @@ class Engine(EngineScoreMixin, EngineBase):
     def _shutdown_workers_gracefully(self):
         watchdog = self.tokenizer_manager._subprocess_watchdog
         workers = dict(zip(watchdog._names, watchdog._processes))
-        if set(workers) != {"scheduler_0", "detokenizer"}:
-            raise RuntimeError("graceful engine shutdown requires one scheduler and detokenizer")
+        tp_size = int(getattr(self.server_args, "tp_size", 1))
+        sched_names = [f"scheduler_{i}" for i in range(tp_size)]
+        expected = set(sched_names) | {"detokenizer"}
+        if set(workers) != expected:
+            raise RuntimeError(
+                f"graceful engine shutdown expected {sorted(expected)}, got {sorted(workers)}"
+            )
 
         def wait_for(name):
             worker = workers[name]
-            worker.join(timeout=30)
+            worker.join(timeout=60)
             if worker.is_alive() or worker.exitcode != 0:
                 raise RuntimeError(f"{name} did not exit cleanly: {worker.exitcode}")
 
@@ -1188,7 +1193,8 @@ class Engine(EngineScoreMixin, EngineBase):
         socket = None
         try:
             self.tokenizer_manager._dispatch_to_scheduler(ShutdownReq())
-            wait_for("scheduler_0")
+            for name in sched_names:
+                wait_for(name)
             # In skip-tokenizer mode the scheduler's normal output socket points
             # to the tokenizer, so address the detokenizer directly.
             context = zmq.Context()
